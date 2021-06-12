@@ -1,0 +1,1 @@
+#define cchar const char
