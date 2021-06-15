@@ -1,4 +1,6 @@
 import os
+import net.http
+import net.urllib
 
 
 #include <security/pam_modules.h>
@@ -43,13 +45,40 @@ fn (mut p PAM) prompt(style int, fmt string) ?string {
 }
 
 
+const (
+    oidc_auth_url = "http://localhost:4444/oauth2/auth"
+    oidc_token_url = "http://localhost:4444/oauth2/token"
+)
+
 [export: 'pam_sm_authenticate']
 fn pam_sm_authenticate(handle &C.pam_handle_t, flags int, argc int, args &&C.cchar) int {
     mut pam := unsafe { PAM{handle: handle} }
-    pam.prompt(C.PAM_TEXT_INFO, "hogehoe: ") or { return 0 }
+
+    mut auth_url := urllib.parse(oidc_auth_url) or { return 0 }
+    mut auth_params := urllib.new_values()
+    auth_params.set("client_id", "test")
+    auth_params.set("scope", "openid offline")
+    auth_params.set("response_type", "code")
+    auth_params.set("state", "abcdefgh")
+    auth_url.raw_query = auth_params.encode()
+
+    pam.prompt(C.PAM_TEXT_INFO, "Authorize URL: ${auth_url}") or { return 0 }
     user := pam.get_user("") or { return 0 }
-    token := pam.get_authtok("Password: ") or { return 0 }
-    println("${user}, ${token}")
+    code := pam.get_authtok("Code: ") or { return 0 }
+    println("${user}, ${code}")
+
+    token_req := map{
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": "",
+        "client_id": "test",
+        "client_secret": "some-secret",
+    }
+    resp := http.post_form(oidc_token_url, token_req) or { 
+        println(err)
+        return 0
+    }
+    println("${resp}")
 
     return C.PAM_SUCCESS
 }
