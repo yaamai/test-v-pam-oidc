@@ -8,57 +8,49 @@ fn C.pam_get_authtok(handle &C.pam_handle_t, item int, token &&C.cchar, prompt &
 fn C.pam_get_item(handle &C.pam_handle_t, item_type int, item &voidptr) int
 fn C.pam_prompt(handle &C.pam_handle_t, style int, resp &&char, fmt &C.cchar) int
 
-struct Pam {
-    handle &C.pam_handle_t
+struct PAM {
+handle &C.pam_handle_t
 }
 
-fn (mut p Pam) get_user(prompt string) ?string {
+fn (mut p PAM) get_user(prompt string) ?string {
     user_ptr := &C.cchar(0)
-    rc := C.pam_get_user(handle, &user_ptr, prompt.str)
+    rc := C.pam_get_user(p.handle, &user_ptr, prompt.str)
     if rc != 0 {
         return error('')
     }
     return unsafe { cstring_to_vstring(&char(user_ptr)) }
 }
 
-fn (mut p Pam) get_authtok(prompt string) ?string {
+fn (mut p PAM) get_authtok(prompt string) ?string {
     out := &C.cchar(0)
-    p := if prompt == "" { 0 } else { prompt.str }
-    rc := C.pam_get_user(handle, &out, p)
+    rc := C.pam_get_authtok(p.handle, C.PAM_AUTHTOK, &out, prompt.str)
     if rc != 0 {
         return error('')
     }
     return unsafe { cstring_to_vstring(&char(out)) }
 }
 
-fn (mut p Pam) prompt(style int, fmt string) ?string {
+fn (mut p PAM) prompt(style int, fmt string) ?string {
+    out := &char(0)
+    rc := C.pam_prompt(p.handle, style, &out, fmt.str)
+    if rc != 0 {
+        return error('')
+    }
+    if out != 0 {
+        return unsafe { cstring_to_vstring(&char(out)) }
+    }
+    return ""
 }
 
 
 [export: 'pam_sm_authenticate']
 fn pam_sm_authenticate(handle &C.pam_handle_t, flags int, argc int, args &&C.cchar) int {
-    pam := Pam{handle: handle}
+    mut pam := unsafe { PAM{handle: handle} }
+    pam.prompt(C.PAM_TEXT_INFO, "hogehoe: ") or { return 0 }
     user := pam.get_user("") or { return 0 }
-    token := pam.get_authtok("")
+    token := pam.get_authtok("Password: ") or { return 0 }
+    println("${user}, ${token}")
 
-    println("pam_sm_authenticate")
-    os.write_file("/tmp/auth", "pam_sm_authenticate") or { return 0 }
-
-    user_ptr := &C.cchar(0)
-    prompt := "aaaaa"
-    rc := C.pam_get_user(handle, &user_ptr, prompt.str)
-    user := unsafe { cstring_to_vstring(&char(user_ptr)) }
-    println("test ${rc} ${user}")
-
-    resp_ptr := &char(0)
-    pr := "testestse"
-    rc3 := C.pam_prompt(handle, C.PAM_TEXT_INFO, &resp_ptr, pr.str)
-    println(rc3)
-
-    pass_ptr := &C.cchar(0)
-    rc2 := C.pam_get_authtok(handle, C.PAM_AUTHTOK, &pass_ptr, 0)
-    pass := unsafe { cstring_to_vstring(&char(pass_ptr)) }
-    println("test ${rc2} ${pass}")
     return C.PAM_SUCCESS
 }
 
