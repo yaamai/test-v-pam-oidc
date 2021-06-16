@@ -59,13 +59,17 @@ fn (c OIDCContext) get_token_by_code(code string) ?OIDCTokenResponse {
         "client_id": c.client_id,
         "client_secret": c.client_secret,
     }
-    resp := http.post_form(oidc_token_url, token_req)?
-    return json.decode(OIDCTokenResponse, resp.text)
+    resp := http.post_form(c.config.token_endpoint, token_req)?
+    token := json.decode(OIDCTokenResponse, resp.text)?
+    return OIDCTokenResponse{
+        ...token,
+        context: c,
+    }
 }
 
 fn pam_sm_authenticate(mut p PAM, flags int, args map[string]string) ?int {
-    config_data := http.get_text(args["oidc_config_url"])
-    config := json.decode(OIDCConfig, config_data)?
+    config_resp := http.get(args["oidc_config_url"])?
+    config := json.decode(OIDCConfig, config_resp.text)?
     ctx := config.new_oidc_context(args["client_id"], args["client_secret"], args["redirect_uri"])?
 
     auth_url := ctx.get_authorize_url(args["scope"].split(","), args["response_type"].split(","))?
@@ -84,8 +88,3 @@ fn pam_sm_acct_mgmt(mut p PAM, flags int, args map[string]string) ?int { return 
 fn pam_sm_open_session(mut p PAM, flags int, args map[string]string) ?int { return C.PAM_SUCCESS }
 fn pam_sm_close_session(mut p PAM, flags int, args map[string]string) ?int { return C.PAM_SUCCESS }
 fn pam_sm_chauthtok(mut p PAM, flags int, args map[string]string) ?int { return C.PAM_AUTHTOK_ERR }
-
-const (
-    oidc_auth_url = "http://localhost:4444/oauth2/auth"
-    oidc_token_url = "http://localhost:4444/oauth2/token"
-)

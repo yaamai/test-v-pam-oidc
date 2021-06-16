@@ -28,7 +28,7 @@ struct JWKSet {
 }
 
 fn parse_jwk_set(url string) ?JWKSet {
-    data := http.get_text(oidc_token_url)
+    data := http.get_text("")
     return json.decode(JWKSet, data)
 }
 

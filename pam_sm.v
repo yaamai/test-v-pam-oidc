@@ -7,6 +7,7 @@ fn export_pam_sm_authenticate(handle &C.pam_handle_t, flags int, argc int, args 
     // if define C.pam_handle_t in vlang, conflict occur with function definitions. (maybe vlang bug?)
     mut pam := unsafe { PAM{handle: handle} }
     return pam_sm_authenticate(mut pam, flags, parse_pam_args(argc, args)) or {
+        C.pam_prompt(handle, C.PAM_ERROR_MSG, voidptr(0), "ERROR: ${err}".str)
         return C.PAM_AUTH_ERR
     }
 }
@@ -16,6 +17,7 @@ fn export_pam_sm_setcred(handle &C.pam_handle_t, flags int, argc int, args &&C.c
     // if define C.pam_handle_t in vlang, conflict occur with function definitions. (maybe vlang bug?)
     mut pam := unsafe { PAM{handle: handle} }
     return pam_sm_setcred(mut pam, flags, parse_pam_args(argc, args)) or {
+        C.pam_prompt(handle, C.PAM_ERROR_MSG, voidptr(0), "ERROR: ${err}".str)
         return C.PAM_CRED_ERR
     }
 }
@@ -25,6 +27,7 @@ fn export_pam_sm_acct_mgmt(handle &C.pam_handle_t, flags int, argc int, args &&C
     // if define C.pam_handle_t in vlang, conflict occur with function definitions. (maybe vlang bug?)
     mut pam := unsafe { PAM{handle: handle} }
     return pam_sm_acct_mgmt(mut pam, flags, parse_pam_args(argc, args)) or {
+        C.pam_prompt(handle, C.PAM_ERROR_MSG, voidptr(0), "ERROR: ${err}".str)
         return C.PAM_AUTH_ERR
     }
 }
@@ -34,6 +37,7 @@ fn export_pam_sm_open_session(handle &C.pam_handle_t, flags int, argc int, args 
     // if define C.pam_handle_t in vlang, conflict occur with function definitions. (maybe vlang bug?)
     mut pam := unsafe { PAM{handle: handle} }
     return pam_sm_open_session(mut pam, flags, parse_pam_args(argc, args)) or {
+        C.pam_prompt(handle, C.PAM_ERROR_MSG, voidptr(0), "ERROR: ${err}".str)
         return C.PAM_SESSION_ERR
     }
 }
@@ -43,6 +47,7 @@ fn export_pam_sm_close_session(handle &C.pam_handle_t, flags int, argc int, args
     // if define C.pam_handle_t in vlang, conflict occur with function definitions. (maybe vlang bug?)
     mut pam := unsafe { PAM{handle: handle} }
     return pam_sm_close_session(mut pam, flags, parse_pam_args(argc, args)) or {
+        C.pam_prompt(handle, C.PAM_ERROR_MSG, voidptr(0), "ERROR: ${err}".str)
         return C.PAM_SESSION_ERR
     }
 }
@@ -52,6 +57,7 @@ fn export_pam_sm_chauthtok(handle &C.pam_handle_t, flags int, argc int, args &&C
     // if define C.pam_handle_t in vlang, conflict occur with function definitions. (maybe vlang bug?)
     mut pam := unsafe { PAM{handle: handle} }
     return pam_sm_chauthtok(mut pam, flags, parse_pam_args(argc, args)) or {
+        C.pam_prompt(handle, C.PAM_ERROR_MSG, voidptr(0), "ERROR: ${err}".str)
         return C.PAM_AUTHTOK_ERR
     }
 }
