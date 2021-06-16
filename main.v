@@ -1,9 +1,11 @@
 module main
 
 import json
+import time
 import net.http
 import net.urllib
 import crypto.rand
+import encoding.base64
 
 struct OIDCConfig {
     issuer string
@@ -47,8 +49,48 @@ fn (c OIDCContext) get_authorize_url(scope []string, response_type []string) ?st
     auth_params.set("scope", scope.join(" "))
     auth_params.set("response_type", response_type.join(" "))
     auth_params.set("state", c.state)
+    auth_params.set("nonce", c.nonce)
     auth_url.raw_query = auth_params.encode()
     return auth_url.str()
+}
+
+struct JWTHeader {
+    alg string
+    kid string
+    typ string
+}
+struct JWTPayload {
+    aud []string
+    exp int
+    iat int
+    iss string
+    sub string
+    nonce string
+}
+
+fn (c OIDCContext) validate_id_token(token OIDCTokenResponse) ?bool {
+    println("${c}, ${token}")
+    jwt_elems := token.id_token.split(".")
+    header_str := base64.url_decode_str(jwt_elems[0])
+    header := json.decode(JWTHeader, header_str)?
+    payload_str := base64.url_decode_str(jwt_elems[1])
+    payload := json.decode(JWTPayload, payload_str)?
+    println("${header}, ${payload}")
+
+    if payload.iss != c.config.issuer { return error('unknown issuer') }
+    if payload.aud.len != 1 { return error('unexpected audience length (TODO?)') }
+    if payload.aud[0] != c.client_id { return error('client_id not in audience') }
+
+    jwk_set := parse_jwk_set(c.config.jwks_uri)?
+    jwk_set.verify(jwt_elems[0], jwt_elems[1], jwt_elems[2])?
+
+    if header.alg != "RS256" { return error('not supported alg') }
+    now := time.now().unix_time()
+    if payload.exp < now-15 { return error('id token expired') }
+    // TODO: check iat if mathutil.abs(payload.iat-now) < 120 { return error('') }
+    if payload.nonce != c.nonce { return error('invalid nonce value') }
+
+    return true
 }
 
 fn (c OIDCContext) get_token_by_code(code string) ?OIDCTokenResponse {
@@ -60,7 +102,12 @@ fn (c OIDCContext) get_token_by_code(code string) ?OIDCTokenResponse {
         "client_secret": c.client_secret,
     }
     resp := http.post_form(c.config.token_endpoint, token_req)?
+    if http.status_from_int(resp.status_code).is_error() {
+        return error('failed to request token: ${resp.text}')
+    }
+    println(resp)
     token := json.decode(OIDCTokenResponse, resp.text)?
+    c.validate_id_token(token)?
     return OIDCTokenResponse{
         ...token,
         context: c,
@@ -77,6 +124,7 @@ fn pam_sm_authenticate(mut p PAM, flags int, args map[string]string) ?int {
 
     // user := p.get_user("")?
     code := p.get_authtok("Code: ")?
+    // TODO: receive URL instead of code string
     token := ctx.get_token_by_code(code)?
 
     println("${token}")
