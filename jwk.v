@@ -1,3 +1,7 @@
+module main
+
+import json
+import net.http
 import encoding.base64
 import crypto.sha256
 
@@ -7,50 +11,73 @@ import crypto.sha256
 #flag -lssl -lcrypto
 fn C.BN_bin2bn(&char, int, voidptr) voidptr
 fn C.RSA_new() voidptr
-fn C.RSA_set0_key(voidptr, voidptr, voidptr, voidptr) voidptr
+fn C.RSA_set0_key(voidptr, voidptr, voidptr, voidptr) int
 fn C.RSA_verify(typ int, m &char, m_len size_t, sig &char, sig_len size_t, rsa voidptr) int
 
-fn C.ERR_get_error() u32
-fn C.ERR_error_string(u32, charptr) charptr
-fn C.RSA_size(voidptr) int
+struct JWK {
+    use string
+    kty string
+    kid string
+    alg string
+    n string
+    e string
+}
 
+struct JWKSet {
+    keys []JWK
+}
 
-fn main() {
-    // n := "tVKUtcx_n9rt5afY_2WFNvU6PlFMggCatsZ3l4RjKxH0jgdLq6CScb0P3ZGXYbPzXvmmLiWZizpb-h0qup5jznOvOr-Dhw9908584BSgC83YacjWNqEK3urxhyE2jWjwRm2N95WGgb5mzE5XmZIvkvyXnn7X8dvgFPF5QwIngGsDG8LyHuJWlaDhr_EPLMW4wHvH0zZCuRMARIJmmqiMy3VD4ftq4nS5s8vJL0pVSrkuNojtokp84AtkADCDU_BUhrc2sIgfnvZ03koCQRoZmWiHu86SuJZYkDFstVTVSR0hiXudFlfQ2rOhPlpObmku68lXw-7V-P7jwrQRFfQVXw"
-    n := "vAhVD1m54-qIyW4Gd1JNKax-TmbVG0EsrykF6BJlZmmhZdxo5XkhsL_PEsf7OIzXxacVeT5EerLD5H02oL-gZ09q2l7JgryaB1lzTVvlriWf4E4Hd-oXzh6sH9cir1okW8cseXPuIbloQ27TUZuUAqhBPTXAcM01xF5pd2hLigGsYZvbrRZyqz0haVYCilI-Agr60kObvrJVdib-AN-rqCSdbunylRlvAkZiyj5Eq6znpZ4WEDhLbUTvKfQXt-86W6Gw7fL2YM6vfLgh1P7CTF8GqT-LA-s1GGyJ8JyJ2GiyBouES0sdCRvwav4BtMuABCc8rDNZKn4SF9-seiUNIAcA4vkbjoNBVgMAh6KO3V6kYw7_6Uan539e2sXCzjtidrEfO3U0Sct3HE8_so2SSaOzBQiOYPl7lfHs-kgbFbR6xkJl9r9pALkc0ZFcMaN3epNhFKJAfZEwJssU2Nn-6LFA_xp0M10haBehoJiN_sfkT3gX7GMn3Kx16xBtQds71ceLs67vrpulP9KgVj36L6xw4zwHg4beNF_bHHd7EMbvBi3cL1KcsQ9r869LOx0nXKM-HPnJzoaSsfVnhx2IbuCNSLghm0c_TLLSc2U4hFfyANnIsD5SQpEUj1ckZmk2hDnRnPfrfJZjbOjpMdrGUoLmhaevPrYLDsK40qAtiOU"
-    e := "AQAB"
+fn parse_jwk_set(url string) ?JWKSet {
+    data := http.get_text(oidc_token_url)
+    return json.decode(JWKSet, data)
+}
 
+/*
+TODO: follow ID Token validation spec
+If the ID Token is encrypted, decrypt it using the keys and algorithms that the Client specified during Registration that the OP was to use to encrypt the ID Token. If encryption was negotiated with the OP at Registration time and the ID Token is not encrypted, the RP SHOULD reject it.
+The Issuer Identifier for the OpenID Provider (which is typically obtained during Discovery) MUST exactly match the value of the iss (issuer) Claim.
+The Client MUST validate that the aud (audience) Claim contains its client_id value registered at the Issuer identified by the iss (issuer) Claim as an audience. The aud (audience) Claim MAY contain an array with more than one element. The ID Token MUST be rejected if the ID Token does not list the Client as a valid audience, or if it contains additional audiences not trusted by the Client.
+If the ID Token contains multiple audiences, the Client SHOULD verify that an azp Claim is present.
+If an azp (authorized party) Claim is present, the Client SHOULD verify that its client_id is the Claim Value.
+If the ID Token is received via direct communication between the Client and the Token Endpoint (which it is in this flow), the TLS server validation MAY be used to validate the issuer in place of checking the token signature. The Client MUST validate the signature of all other ID Tokens according to JWS [JWS] using the algorithm specified in the JWT alg Header Parameter. The Client MUST use the keys provided by the Issuer.
+The alg value SHOULD be the default of RS256 or the algorithm sent by the Client in the id_token_signed_response_alg parameter during Registration.
+If the JWT alg Header Parameter uses a MAC based algorithm such as HS256, HS384, or HS512, the octets of the UTF-8 representation of the client_secret corresponding to the client_id contained in the aud (audience) Claim are used as the key to validate the signature. For MAC based algorithms, the behavior is unspecified if the aud is multi-valued or if an azp value is present that is different than the aud value.
+The current time MUST be before the time represented by the exp Claim.
+The iat Claim can be used to reject tokens that were issued too far away from the current time, limiting the amount of time that nonces need to be stored to prevent attacks. The acceptable range is Client specific.
+If a nonce value was sent in the Authentication Request, a nonce Claim MUST be present and its value checked to verify that it is the same value as the one that was sent in the Authentication Request. The Client SHOULD check the nonce value for replay attacks. The precise method for detecting replay attacks is Client specific.
+If the acr Claim was requested, the Client SHOULD check that the asserted Claim Value is appropriate. The meaning and processing of acr Claim Values is out of scope for this specification.
+If the auth_time Claim was requested, either through a specific request for this Claim or by using the max_age parameter, the Client SHOULD check the auth_time Claim value and request re-authentication if it determines too much time has elapsed since the last End-User authentication.
+*/
+fn load_rsa_key(n string, e string) ?voidptr {
+    // load rsa key
     nb := base64.url_decode_str(n)
     eb := base64.url_decode_str(e)
-
     mod := C.BN_bin2bn(nb.str, nb.len, 0)
     exp := C.BN_bin2bn(eb.str, eb.len, 0)
     rsa := C.RSA_new()
-    rc1 := C.RSA_set0_key(rsa, mod, exp, 0)
-    println("rc1: ${rc1}")
+    rc := C.RSA_set0_key(rsa, mod, exp, voidptr(0))
+    if rc != 1 {
+        return error('failed to load RSA key')
+    }
 
-    jwt := "eyJhbGciOiJSUzI1NiIsImtpZCI6InB1YmxpYzoyMThmYWI5ZS1mOGFlLTQ0MDgtYWU1My0zMTNlZWFhZDA1Y2EiLCJ0eXAiOiJKV1QifQ.eyJhdF9oYXNoIjoiZ1NFNDU1Q3pyR2ZtUkdyYkdHR1ljZyIsImF1ZCI6WyJ0ZXN0Il0sImF1dGhfdGltZSI6MTYyMzc4NzM0MSwiZXhwIjoxNjIzNzkwOTUyLCJpYXQiOjE2MjM3ODczNTIsImlzcyI6Imh0dHA6Ly9sb2NhbGhvc3Q6NDQ0NC8iLCJqdGkiOiJhNDE1NWQyYi04NWQwLTQ0ODktYjdhYS0yNDQ3YzVhZDhkNmUiLCJub25jZSI6IiIsInJhdCI6MTYyMzc4NzMzNCwic2lkIjoiNGU2YzU0Y2QtNjdkYi00NzhlLTk2Y2YtYTZiYmU5OTBiMTY4Iiwic3ViIjoiZm9vQGJhci5jb20ifQ.S8So6mSU_kmu3AtsjIdLOyXxEsFiCwqL8ma6PCP5rO5N5i62Vqrtonx_0slJnUbBDk4puAb3RgvfC1mdPNEA9qRqE4xq7Jzg2NwkgXtj9fVrPuveVfkfAOauJxiBPcpc0Q-vcTBwxHisEn_LbdIYpU4rDp1W3qRj9qm0RQKOGtgLMtl1I3UpyQLcRRqmj6clCKcvtSjYW6Lo2bHjJ4bwq7t-d6kZGWjXt1tvR7Bb27xNv_Y6chdGTeDFPSW0m61GvPgrOREmyQc4MkjDrMFoTdhzHDqVXRrEPqg156DtuHvR07DzmxdzrU4XGePn-h3_vRCLgH8PtEv2sZ8YKOIQeRV6ZvdNy0iFBz65t9jPNMVtvxII0YagckKfjKT7lAi2wu3W6LGaMwOqU81InSb82vfGj1q1H-_iuoTIRAHjDAPoT2C3N8VoM_3J6WACv4rQ3mIHak9_4SSXq0U2JAo9nKDrV62c-LUDPmfagNzUJ0C4WCDrbOXx9LsdyeohnGdffLSxn7XUuszNnJe7ByakykWqyQH92tKXIBIrCMLHy4fF3vplmDe2hHoz5NuvzLP26qOsGW2t7cRoQmEG8slTZDY_EJ6M2axLe6qQtIe5q5TK7veSDY89PY2BmrjYGaCrjjcArATyYdXoO8r1iKAyZ6XKqGbGE7kDsU_rlZTdk1U"
+    return rsa
+}
 
+fn rsa_sha256_verify(rsa voidptr, data []byte, sig []byte) ?bool {
+    data_sum := sha256.sum256(data)
+    rc := C.RSA_verify(C.NID_sha256, data_sum.data, data_sum.len, sig.data, sig.len, rsa)
+    if rc != 1 {
+        return error('failed to verify signature')
+    }
+
+    return true
+}
+
+fn (s JWKSet) verify(jwt string) ?bool {
     jwt_elems := jwt.split(".")
+
+    rsa := load_rsa_key(s.keys[0].n, s.keys[1].e)?
     data := jwt_elems[0]+"."+jwt_elems[1]
-    println(data)
-    println(data.len)
-    println(jwt.len)
-    println(data.bytes()[0])
-    println(sha256.hexhash(data))
-    println(sha256.hexhash(""))
-    data_sum := sha256.sum256(data.bytes())
-    println(data_sum)
-    sig := base64.url_decode_str(jwt_elems[2])
-    println(sig.len)
-    println(C.RSA_size(rsa))
-
-    rc2 := C.RSA_verify(C.NID_sha256, data_sum.data, data_sum.len, sig.str, sig.len, rsa)
-    err := C.ERR_get_error()
-    println("rc2: ${rc2}")
-    println("rc2: ${}")
-
-    err_str := []byte{len: 1024}
-    C.ERR_error_string(err, err_str.data)
-    println(err_str.bytestr())
+    sig := base64.url_decode(jwt_elems[2])
+    return rsa_sha256_verify(rsa, data.bytes(), sig)
 }
