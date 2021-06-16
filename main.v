@@ -24,7 +24,7 @@ fn pam_sm_authenticate(mut p PAM, flags int, args map[string]string) ?int {
         "client_id": "test",
         "client_secret": "some-secret",
     }
-    resp := http.post_form(oidc_token_url, token_req) or { 
+    resp := http.post_form(oidc_token_url, token_req) or {
         println(err)
         return 0
     }
@@ -42,19 +42,3 @@ const (
     oidc_auth_url = "http://localhost:4444/oauth2/auth"
     oidc_token_url = "http://localhost:4444/oauth2/token"
 )
-
-fn parse_pam_args(argc int, args &&C.cchar) map[string]string {
-    mut result := map[string]string{}
-    for idx := 0; idx < argc; idx++ {
-        p := unsafe { args+idx }
-        s := unsafe { cstring_to_vstring(&char(*p))}
-        keyval := s.split_nth("=", 2)
-        if keyval.len == 2 {
-            result[keyval[0]] = keyval[1]
-        } else if keyval.len == 1 {
-            result[keyval[0]] = ""
-        }
-    }
-    return result
-}
-
