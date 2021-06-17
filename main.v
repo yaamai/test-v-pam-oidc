@@ -27,7 +27,8 @@ struct OIDCTokenResponse {
     context OIDCContext
     access_token string
     expires_in int
-    id_token string
+    id_token_str string [json: "id_token"]
+    id_token JWT
 }
 
 fn (c OIDCConfig) new_oidc_context(client_id string, client_secret string, redirect_uri string) ?OIDCContext {
@@ -54,6 +55,11 @@ fn (c OIDCContext) get_authorize_url(scope []string, response_type []string) ?st
     return auth_url.str()
 }
 
+struct JWT {
+    header JWTHeader
+    payload JWTPayload
+}
+
 struct JWTHeader {
     alg string
     kid string
@@ -68,9 +74,9 @@ struct JWTPayload {
     nonce string
 }
 
-fn (c OIDCContext) validate_id_token(token OIDCTokenResponse) ?bool {
+fn (c OIDCContext) validate_id_token(token OIDCTokenResponse) ?JWT {
     println("${c}, ${token}")
-    jwt_elems := token.id_token.split(".")
+    jwt_elems := token.id_token_str.split(".")
     header_str := base64.url_decode_str(jwt_elems[0])
     header := json.decode(JWTHeader, header_str)?
     payload_str := base64.url_decode_str(jwt_elems[1])
@@ -90,7 +96,7 @@ fn (c OIDCContext) validate_id_token(token OIDCTokenResponse) ?bool {
     // TODO: check iat if mathutil.abs(payload.iat-now) < 120 { return error('') }
     if payload.nonce != c.nonce { return error('invalid nonce value') }
 
-    return true
+    return JWT{header: header, payload: payload}
 }
 
 fn (c OIDCContext) get_token_by_code(code string) ?OIDCTokenResponse {
@@ -107,11 +113,20 @@ fn (c OIDCContext) get_token_by_code(code string) ?OIDCTokenResponse {
     }
     println(resp)
     token := json.decode(OIDCTokenResponse, resp.text)?
-    c.validate_id_token(token)?
+    jwt := c.validate_id_token(token)?
     return OIDCTokenResponse{
         ...token,
         context: c,
+        id_token: jwt,
     }
+}
+
+fn (c OIDCContext) get_token_by_url(url_str string) ?OIDCTokenResponse {
+    url := urllib.parse(url_str)?
+    query := url.query()
+
+    if c.state != query.get('state') { return error('state value mismatch') }
+    return c.get_token_by_code(query.get('code'))
 }
 
 fn pam_sm_authenticate(mut p PAM, flags int, args map[string]string) ?int {
@@ -120,14 +135,15 @@ fn pam_sm_authenticate(mut p PAM, flags int, args map[string]string) ?int {
     ctx := config.new_oidc_context(args["client_id"], args["client_secret"], args["redirect_uri"])?
 
     auth_url := ctx.get_authorize_url(args["scope"].split(","), args["response_type"].split(","))?
-    p.prompt(C.PAM_TEXT_INFO, "Authorize URL: ${auth_url}")?
+    p.prompt(C.PAM_TEXT_INFO, "please open and sign-in \"${auth_url}\".")?
 
-    // user := p.get_user("")?
-    code := p.get_authtok("Code: ")?
+    url := p.get_authtok("Redirected URL: ")?
     // TODO: receive URL instead of code string
-    token := ctx.get_token_by_code(code)?
+    token := ctx.get_token_by_url(url)?
 
     println("${token}")
+    user := p.get_user("")?
+    if user != token.id_token.payload.sub { return C.PAM_AUTH_ERR }
     return C.PAM_SUCCESS
 }
 
