@@ -1,5 +1,7 @@
 module main
 
+import os
+
 #include <security/pam_modules.h>
 
 [export: 'pam_sm_authenticate']
@@ -8,6 +10,8 @@ fn export_pam_sm_authenticate(handle &C.pam_handle_t, flags int, argc int, args 
     mut pam := unsafe { PAM{handle: handle} }
     return pam_sm_authenticate(mut pam, flags, parse_pam_args(argc, args)) or {
         C.pam_prompt(handle, C.PAM_ERROR_MSG, voidptr(0), "ERROR: ${err}".str)
+        s := "ERROR: ${err}\n"
+        os.write_file("/tmp/pam_oidc.log", os.read_file("/tmp/pam_oidc.log") or {""} + s) or {}
         return C.PAM_AUTH_ERR
     }
 }
