@@ -8,4 +8,5 @@
 
 # v -shared -prod -o out.c
 # gcc -fPIC -o /lib/x86_64-linux-gnu/security/pam_oidc.so -shared -lpam -lssl out.c
+# vim /etc/pam.d/common-auth
 ```
