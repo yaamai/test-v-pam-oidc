@@ -75,13 +75,11 @@ struct JWTPayload {
 }
 
 fn (c OIDCContext) validate_id_token(token OIDCTokenResponse) ?JWT {
-    println("${c}, ${token}")
     jwt_elems := token.id_token_str.split(".")
     header_str := base64.url_decode_str(jwt_elems[0])
     header := json.decode(JWTHeader, header_str)?
     payload_str := base64.url_decode_str(jwt_elems[1])
     payload := json.decode(JWTPayload, payload_str)?
-    println("${header}, ${payload}")
 
     if payload.iss != c.config.issuer { return error('unknown issuer') }
     if payload.aud.len != 1 { return error('unexpected audience length (TODO?)') }
@@ -111,7 +109,6 @@ fn (c OIDCContext) get_token_by_code(code string) ?OIDCTokenResponse {
     if http.status_from_int(resp.status_code).is_error() {
         return error('failed to request token: ${resp.text}')
     }
-    println(resp)
     token := json.decode(OIDCTokenResponse, resp.text)?
     jwt := c.validate_id_token(token)?
     return OIDCTokenResponse{
@@ -141,7 +138,6 @@ fn pam_sm_authenticate(mut p PAM, flags int, args map[string]string) ?int {
     // TODO: receive URL instead of code string
     token := ctx.get_token_by_url(url)?
 
-    println("${token}")
     user := p.get_user("")?
     if user != token.id_token.payload.sub { return C.PAM_AUTH_ERR }
     return C.PAM_SUCCESS

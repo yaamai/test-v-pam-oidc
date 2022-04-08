@@ -31,8 +31,9 @@ fn (mut p PAM) get_authtok(prompt string) ?string {
 }
 
 fn (mut p PAM) prompt(style int, fmt string) ?string {
+    // NOTE: this function ignores va_list arguments.
     out := &char(0)
-    rc := C.pam_prompt(p.handle, style, &out, fmt.str)
+    rc := C.pam_prompt(p.handle, style, &out, fmt.replace("%", "%%").str)
     if rc != 0 {
         return error('')
     }
