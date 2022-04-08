@@ -12,7 +12,7 @@ import crypto.sha256
 fn C.BN_bin2bn(&char, int, voidptr) voidptr
 fn C.RSA_new() voidptr
 fn C.RSA_set0_key(voidptr, voidptr, voidptr, voidptr) int
-fn C.RSA_verify(typ int, m &char, m_len size_t, sig &char, sig_len size_t, rsa voidptr) int
+fn C.RSA_verify(typ int, m &char, m_len int, sig &char, sig_len int, rsa voidptr) int
 
 struct JWK {
     use string

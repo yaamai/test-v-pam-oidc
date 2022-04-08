@@ -1,6 +1,7 @@
 module main
 
 #include <security/pam_ext.h>
+#flag -I @VMODROOT
 #include "types.h"
 fn C.pam_get_user(handle &C.pam_handle_t, user &&C.cchar, prompt &C.cchar) int
 fn C.pam_get_authtok(handle &C.pam_handle_t, item int, token &&C.cchar, prompt &C.cchar) int

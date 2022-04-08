@@ -100,7 +100,7 @@ fn (c OIDCContext) validate_id_token(token OIDCTokenResponse) ?JWT {
 }
 
 fn (c OIDCContext) get_token_by_code(code string) ?OIDCTokenResponse {
-    token_req := map{
+    token_req := {
         "grant_type": "authorization_code",
         "code": code,
         "redirect_uri": c.redirect_uri,
