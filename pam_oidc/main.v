@@ -1,5 +1,6 @@
 module main
 
+import os
 import json
 import time
 import net.http
@@ -126,21 +127,28 @@ fn (c OIDCContext) get_token_by_url(url_str string) ?OIDCTokenResponse {
     return c.get_token_by_code(query.get('code'))
 }
 
+
 fn pam_sm_authenticate(mut p PAM, flags int, args map[string]string) ?int {
     config_resp := http.get(args["oidc_config_url"])?
     config := json.decode(OIDCConfig, config_resp.text)?
     ctx := config.new_oidc_context(args["client_id"], args["client_secret"], args["redirect_uri"])?
 
     auth_url := ctx.get_authorize_url(args["scope"].split(","), args["response_type"].split(","))?
-    p.prompt(C.PAM_TEXT_INFO, "please open and sign-in \"${auth_url}\".")?
+    p.prompt(C.PAM_TEXT_INFO, "Please open and sign-in \"${auth_url}\".")?
 
-    url := p.get_authtok("Redirected URL: ")?
+    url := p.get_authtok("Paste redirected URL: ")?
     // TODO: receive URL instead of code string
     token := ctx.get_token_by_url(url)?
 
     user := p.get_user("")?
-    if user != token.id_token.payload.sub { return C.PAM_AUTH_ERR }
-    return C.PAM_SUCCESS
+    mapping_json := os.read_file(args["mapping"]) or { "{}" }
+    mapping := json.decode(map[string]string, mapping_json)?
+    authenticated_user := mapping[token.id_token.payload.sub] or { token.id_token.payload.sub }
+
+    if authenticated_user == user {
+        return C.PAM_SUCCESS
+    }
+    return C.PAM_AUTH_ERR
 }
 
 fn pam_sm_setcred(mut p PAM, flags int, args map[string]string) ?int { return C.PAM_SUCCESS }
